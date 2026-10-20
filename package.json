@@ -1,0 +1,38 @@
+{
+  "name": "@local/dsh-plugin-aliyun-ecs-connect",
+  "version": "0.2.0",
+  "description": "Start an Alibaba Cloud ECS instance on demand, read its current public IP, and open an SSH terminal.",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "lib/*.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "cordis",
+    "plugin",
+    "aliyun",
+    "alibaba-cloud",
+    "ecs",
+    "ssh"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SepTem61r/dsh-aliyun-ecs-connect.git"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

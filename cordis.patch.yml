@@ -1,0 +1,12 @@
+# Insert the plugin row.
+#
+# This file is part of the published package and therefore contains no personal
+# data. Fill in ~/.dsh/aliyun-ecs-settings.json with your own instance settings
+# (see README), and keep the AccessKey in ~/.dsh/aliyun-ecs.json.
+#
+# Any key written here is overridden by the user settings file, so this row is
+# only a place for advanced overrides.
+- insert:
+    - id: aliyun-ecs-connect
+      name: '@local/dsh-plugin-aliyun-ecs-connect'
+      config: {}

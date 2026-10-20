@@ -1,0 +1,16 @@
+# Dependencies (a local bundle links its own checkout; nothing should be here)
+node_modules/
+pnpm-lock.yaml
+
+# Personal configuration that must never be committed
+aliyun-ecs.json
+aliyun-ecs-settings.json
+*.pem
+*.key
+.env
+.env.*
+
+# Logs and OS noise
+*.log
+.DS_Store
+Thumbs.db

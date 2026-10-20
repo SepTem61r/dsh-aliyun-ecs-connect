@@ -1,0 +1,20 @@
+{
+  "Version": "1",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:DescribeInstances"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecs:StartInstance",
+        "ecs:StopInstance"
+      ],
+      "Resource": "acs:ecs:<region-id>:*:instance/<instance-id>"
+    }
+  ]
+}

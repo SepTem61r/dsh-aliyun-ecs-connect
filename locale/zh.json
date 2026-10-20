@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "阿里云 ECS 一键连接",
+    "description": "按需启动阿里云 ECS 实例，取得当前公网 IP，并自动打开 SSH 终端。"
+  }
+}

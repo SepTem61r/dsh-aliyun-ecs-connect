@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Aliyun ECS Quick Connect",
+    "description": "Starts an Alibaba Cloud ECS instance on demand, reads its current public IP, and opens an SSH terminal."
+  }
+}

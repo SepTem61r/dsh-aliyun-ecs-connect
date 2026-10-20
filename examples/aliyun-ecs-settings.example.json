@@ -1,0 +1,9 @@
+{
+  "regionId": "cn-hongkong",
+  "instanceId": "i-xxxxxxxxxxxxxxxxx",
+  "sshUser": "root",
+  "identityFile": "C:\\Users\\you\\.ssh\\your-key.pem",
+  "sshPort": 22,
+  "terminal": "auto",
+  "autoConnect": false
+}
