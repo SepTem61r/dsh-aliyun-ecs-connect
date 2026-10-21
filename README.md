@@ -1,73 +1,75 @@
-# Aliyun ECS Quick Connect (DSH plugin)
+# 阿里云 ECS 一键连接（DSH 插件）
 
-> One command boots your Alibaba Cloud ECS instance, reads its **current** public IP, and opens a ready-to-use SSH terminal.
-> No console login, no waiting, no copying IPs, no retyping `ssh -i ... root@...` every time.
+> 给「用时才开」的学生党：**一条命令开机 → 自动拿到当前公网 IP → 弹出一个连好的 SSH 终端**。
+> 不用登录控制台点「启动」，不用等开机，不用复制 IP，也不用每次重敲 `ssh -i ... root@...`。
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
 
-[中文教程](README.zh-CN.md)
+---
 
-> 🚀 **New here?** Start with the [5-minute quick start](#5-minute-quick-start) and copy-paste your way through. The rest explains the details, money, and troubleshooting.
+## 目录
+
+- [5 分钟快速开始](#5-分钟快速开始)
+- [它到底做了什么](#它到底做了什么)
+- [功能一览](#功能一览)
+- [准备工作（详细版）](#准备工作详细版)
+  - [1. 确认这台服务器你能 SSH 登录](#1-确认这台服务器你能-ssh-登录)
+  - [2. 创建 RAM 子账号并拿到 AccessKey](#2-创建-ram-子账号并拿到-accesskey)
+  - [3. 找到实例 ID 和地域](#3-找到实例-id-和地域)
+  - [4. 装好 DSH](#4-装好-dsh)
+- [安装插件](#安装插件)
+- [写两个配置文件](#写两个配置文件)
+- [第一次运行与验证](#第一次运行与验证)
+- [日常使用](#日常使用)
+- [费用与省钱](#费用与省钱)
+- [为什么不需要弹性公网 IP（EIP）](#为什么不需要弹性公网-ipeip)
+- [安全须知](#安全须知)
+- [排错手册](#排错手册)
+- [常见问题 FAQ](#常见问题-faq)
+- [开发与测试](#开发与测试)
+- [目录结构](#目录结构)
+- [许可证](#许可证)
 
 ---
 
-## Table of contents
+## 5 分钟快速开始
 
-- [5-minute quick start](#5-minute-quick-start)
-- [What it actually does](#what-it-actually-does)
-- [Features](#features)
-- [Prerequisites in detail](#prerequisites-in-detail)
-  - [1. Make sure you can SSH into the instance](#1-make-sure-you-can-ssh-into-the-instance)
-  - [2. Create a RAM sub-account and an AccessKey](#2-create-a-ram-sub-account-and-an-accesskey)
-  - [3. Find the instance ID and region](#3-find-the-instance-id-and-region)
-  - [4. Install DSH](#4-install-dsh)
-- [Install the plugin](#install-the-plugin)
-- [Write the two configuration files](#write-the-two-configuration-files)
-- [First run and verification](#first-run-and-verification)
-- [Daily use](#daily-use)
-- [Billing](#billing)
-- [Why no EIP is needed](#why-no-eip-is-needed)
-- [Security notes](#security-notes)
-- [Troubleshooting](#troubleshooting)
-- [FAQ](#faq)
-- [Development](#development)
-- [Layout](#layout)
-- [License](#license)
+> 已经着急了？照抄下面 5 步。每一步都解释了「为什么」，遇到问题跳 [排错手册](#排错手册)。
 
----
+**第 0 步：准备好三样东西**
 
-## 5-minute quick start
-
-**Step 0 — have three things ready**
-
-| You need | Where it comes from |
+| 你需要 | 从哪来 |
 |---|---|
-| Instance ID (`i-...`) and region (e.g. `cn-hongkong`) | Alibaba Cloud console → ECS → Instances |
-| The `.pem` private key | The file downloaded when the instance was created (e.g. `D:\path\to\your-key.pem`) |
-| AccessKey ID + Secret | RAM console, created for a sub-account ([details below](#2-create-a-ram-sub-account-and-an-accesskey)) |
+| 实例 ID（`i-` 开头）和地域（如 `cn-hongkong`） | 阿里云控制台 → 云服务器 ECS → 实例列表 |
+| `.pem` 私钥文件 | 创建实例时下载的那个文件（例：`D:\path\to\your-key.pem`） |
+| AccessKey ID + Secret | 阿里云 RAM 控制台，给一个子账号创建（[下面有详细步骤](#2-创建-ram-子账号并拿到-accesskey)） |
 
-**Step 1 — install the plugin**
+**第 1 步：装插件**
+
+把仓库克隆到本地（路径随意，下面用 `D:\dsh-aliyun-ecs-connect`）：
 
 ```powershell
 git clone https://github.com/SepTem61r/dsh-aliyun-ecs-connect.git D:\dsh-aliyun-ecs-connect
 ```
 
-Then open DSH and send this message (the easiest path — the agent installs it for you):
+然后打开 DSH，在聊天框里发这句话（让 DSH 里的 AI 帮你装，最省事）：
 
-> Install `D:\dsh-aliyun-ecs-connect` as a plugin into the current profile, and tell me when it is active.
+> 帮我把 `D:\dsh-aliyun-ecs-connect` 这个目录作为插件安装到当前 profile，装好后告诉我。
 
-**Step 2 — write the settings file** (in *your own* PowerShell, not inside DSH)
+**第 2 步：写配置**（在**你自己**的 PowerShell 里执行，不是在 DSH 里）
 
 ```powershell
 notepad "$env:USERPROFILE\.dsh\aliyun-ecs-settings.json"
 ```
 
+把下面内容粘进去，改成你自己的值，保存：
+
 ```json
 {
   "regionId": "cn-hongkong",
-  "instanceId": "i-your-instance-id",
+  "instanceId": "i-你的实例ID",
   "sshUser": "root",
   "identityFile": "D:\\path\\to\\your-key.pem",
   "sshPort": 22,
@@ -76,108 +78,120 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs-settings.json"
 }
 ```
 
-**Step 3 — write the AccessKey file**
+**第 3 步：写 AccessKey**
 
 ```powershell
 notepad "$env:USERPROFILE\.dsh\aliyun-ecs.json"
 ```
 
+粘进去，保存：
+
 ```json
-{ "accessKeyId": "LTAI...", "accessKeySecret": "..." }
+{ "accessKeyId": "LTAI你的ID", "accessKeySecret": "你的Secret" }
 ```
 
-**Step 4 — restart DSH.** The plugin and its configuration are read at startup.
+**第 4 步：重启 DSH**
 
-**Step 5 — use it**
+关掉 DSH（终端里 `Ctrl+C` 或关窗口），再启动一次。插件和配置只在启动时读取。
 
-Type `/` in the DSH composer. If you see `connect`, `ecs-status`, and `ecs-stop`, the plugin is live:
+**第 5 步：用**
+
+在 DSH 输入框里打 `/`，能看到 `connect`、`ecs-status`、`ecs-stop` 就说明装好了。然后：
 
 ```text
-/ecs-status     ← read the instance without starting it
-/connect        ← start it if needed, resolve the IP, open a terminal
+/ecs-status     ← 先看看能不能读到实例（不会开机）
+/connect        ← 开机 + 拿 IP + 弹终端
 ```
 
-A successful `/connect` opens a Windows Terminal window already connected, and DSH shows:
+`/connect` 成功时，会弹出一个 Windows Terminal 窗口，里面已经连上服务器；DSH 里也会显示：
 
 ```text
-✅ i-xxxxx (Running)
-Public IP: 203.0.113.10
-Terminal: windows-terminal
-Command: ssh -i D:\path\to\your-key.pem ... root@203.0.113.10
+✅ i-xxxxx（Running）
+公网 IP：203.0.113.10
+终端：windows-terminal
+命令：ssh -i D:\path\to\your-key.pem ... root@203.0.113.10
 ```
 
 ---
 
-## What it actually does
+## 它到底做了什么
 
-Connecting used to mean: log into the console → find the instance → click *Start* → wait → refresh → copy the public IP → open cmd → paste `ssh -i "D:\path\to\your-key.pem" root@<ip>`.
+你以前每次要连服务器，得做这些事：
 
-The plugin does all of that:
+1. 打开浏览器，登录阿里云
+2. 找到那台实例，点「启动」
+3. 等它从「已停止」变成「运行中」
+4. 刷新，找「公网 IP」，复制
+5. 打开 cmd，粘 `ssh -i "D:\path\to\your-key.pem" root@刚才那个IP`
+
+这个插件把 1–5 全包了：
 
 ```text
 /connect
-  → DescribeInstances        (status + current public IP)
-  → StartInstance            (only when stopped)
-  → poll every 3 s until Running with a public IP
-  → wait until TCP port 22 accepts (sshd starts after the OS)
-  → open Windows Terminal with the ssh command
+  → 查实例状态和当前公网 IP        （DescribeInstances）
+  → 如果已停止，调用开机接口       （StartInstance）
+  → 每 3 秒查一次，直到运行且有 IP
+  → 等 22 端口能连（sshd 比系统晚启动）
+  → 打开 Windows Terminal 执行 ssh 命令
 ```
 
-Two consequences:
+所以两条关键点：
 
-- **The IP is read fresh every time**, so you never track it.
-- **It is idempotent**: running it while the instance is already up just resolves the IP and opens a window (~1 s).
+- **IP 是每次现查的**，所以你不用再记、也不用担心它变。
+- **幂等**：已经在运行时再执行 `/connect`，不会重复开机，只会查 IP 并开窗口（1 秒左右）。
 
 ---
 
-## Features
+## 功能一览
 
-| Entry point | What it does |
+| 入口 | 作用 |
 |---|---|
-| `/connect` | Start if needed → resolve IP → wait for SSH → open a terminal |
-| `/ecs-status` | Status and current public IP only; **never** starts the instance |
-| `/ecs-stop` | Stop the instance (pay-as-you-go instances use billing-stopping mode) |
-| Natural language | Say "connect me to the server" and the agent calls the `ecs_connect` tool |
-| Boot-time auto connect | Off by default; set `autoConnect: true` to enable |
+| `/connect` | 完整流程：按需开机 → 查 IP → 等 SSH → 开终端 |
+| `/ecs-status` | 只看状态和当前公网 IP，**绝不启动**实例 |
+| `/ecs-stop` | 停机（按量付费实例优先用「节省停机模式」，更省钱） |
+| 自然语言 | 直接对 DSH 说「帮我连一下服务器」，AI 会调用 `ecs_connect` 工具 |
+| 启动时自动连 | 默认**关闭**；想要就设 `autoConnect: true` |
 
 ---
 
-## Prerequisites in detail
+## 准备工作（详细版）
 
-### 1. Make sure you can SSH into the instance
+### 1. 确认这台服务器你能 SSH 登录
 
-Connect once by hand and confirm:
+先用自己的方式连一次，确认这三件事：
 
 ```powershell
-ssh -i "D:\path\to\your-key.pem" root@YOUR_PUBLIC_IP
+ssh -i "D:\path\to\your-key.pem" root@你的公网IP
 ```
 
-- **User**: usually `root` (some Ubuntu images use `ubuntu`)
-- **Key file exists**: `Test-Path D:\path\to\your-key.pem` must return `True`
-- **Security group** allows inbound TCP 22 (instance details → Security Groups)
-- Fix any of these **before** installing the plugin, otherwise a working plugin still cannot connect
+- **用户名**：一般是 `root`（Ubuntu 镜像也可能是 `ubuntu`，按你创建实例时的设置）
+- **私钥文件**：`.pem` 文件必须还在（`Test-Path D:\path\to\your-key.pem` 返回 `True`）。丢了可以去 ECS 控制台「密钥对」重新创建并绑定，或者重置实例密码
+- **安全组**：默认放行 22 端口。如果你改过，去 实例详情 → 安全组，确认入方向允许 `22`
+- **能连上**再往下做，不然插件装好了也连不上，容易误判
 
-### 2. Create a RAM sub-account and an AccessKey
+### 2. 创建 RAM 子账号并拿到 AccessKey
 
-> **Why?** The plugin clicks *Start* for you, which means calling Alibaba Cloud APIs, which requires an **AccessKey**. It is not your console password and not your `.pem`:
+> **为什么要这一步？** 插件要替你「点启动按钮」，就得调阿里云的 API。调 API 需要账号密码 —— 这个密码叫 **AccessKey**。
+> 它跟你的登录密码、跟 `.pem` 都不是一回事：
 >
-> | Thing | Used for | Who uses it |
+> | 东西 | 用在哪 | 谁用 |
 > |---|---|---|
-> | Console password | Alibaba Cloud website | you |
-> | `.pem` key | SSH login | `ssh` |
-> | **AccessKey** | Alibaba Cloud API calls | **this plugin** |
+> | 控制台登录密码 | 登录阿里云网页 | 你 |
+> | `.pem` 私钥 | SSH 登录服务器 | `ssh` 命令 |
+> | **AccessKey** | 调阿里云 API（开机/查 IP） | **这个插件** |
 
-Never use the primary account's AccessKey. Create a sub-account limited to this one instance:
+**千万不要用主账号的 AccessKey。** 建一个只有「开机这一台机器」权限的子账号：
 
-1. Alibaba Cloud console → avatar (top right) → **RAM** (Access Control)
-2. **Identities → Users → Create User**
-3. Name it something like `dsh-ecs-connect`
-4. Access method: check **OpenAPI AccessKey** only — console login is not needed
-5. The page shows the **AccessKey ID** and **AccessKey Secret**. The secret is shown **once**; copy it now (or download the CSV)
-6. Grant permissions:
-   - **Permissions → Create Policy → Script editor**
-   - Paste the policy below, replacing `<region-id>` and `<instance-id>`
-   - Name it `dsh-ecs-connect-policy` and create it
+1. 浏览器登录阿里云 → 右上角头像 → **访问控制 RAM**（或直接搜「RAM 访问控制」）
+2. 左边菜单 **身份管理 → 用户 → 创建用户**
+3. 登录名称填一个你记得的，比如 `dsh-ecs-connect`
+4. 访问方式**只勾「使用永久 AccessKey 访问」**（不需要勾控制台登录）
+5. 点确定后，页面会显示 **AccessKey ID** 和 **AccessKey Secret**。
+   ⚠️ **Secret 只显示这一次**，现在立刻复制下来（可以点「下载 CSV」）。关掉就再也看不到，只能删了重建
+6. 现在给它授权：
+   - 左边 **权限策略 → 创建权限策略 → 脚本编辑**
+   - 把下面这段粘进去，**把 `<region-id>` 和 `<instance-id>` 换成你自己的**
+   - 名字填 `dsh-ecs-connect-policy`，创建
 
 ```json
 {
@@ -193,71 +207,92 @@ Never use the primary account's AccessKey. Create a sub-account limited to this 
 }
 ```
 
-   For example, instance `i-xxxxxxxxxxxxxxxxx` in `cn-hongkong`:
+   比如你的实例是 `i-xxxxxxxxxxxxxxxxx`、地域 `cn-hongkong`，最后一行就是：
 
-```json
-"Resource": "acs:ecs:cn-hongkong:*:instance/i-xxxxxxxxxxxxxxxxx"
-```
+   ```json
+   "Resource": "acs:ecs:cn-hongkong:*:instance/i-xxxxxxxxxxxxxxxxx"
+   ```
 
-7. Back at **Users → your user → Add Permissions → Custom policy → `dsh-ecs-connect-policy`**
+7. 再回到 **用户 → 你的用户 → 添加权限 → 选「自定义策略」→ 勾上 `dsh-ecs-connect-policy`**
 
-This policy allows exactly three things: describe instances, start that one instance, stop that one instance. It cannot delete anything or touch other instances.
+这个策略只允许三件事：查实例、启动这一台、停止这一台。**不能删机器，不能碰别的实例。**
 
-> If you get `Forbidden.RAM` after this, first check the policy is really attached to the user. Some accounts require `"Resource": "*"` on the two action statements — with only these three actions the exposure stays small.
+> 授权后如果报 `Forbidden.RAM`：先检查策略是否真的绑定到了这个用户；个别账号的资源级授权需要把 `Resource` 改成 `"*"` 才能通过（只有这三个只读/开关动作，风险可控）。
 
-### 3. Find the instance ID and region
+### 3. 找到实例 ID 和地域
 
-Console → **ECS → Instances**:
+阿里云控制台 → **云服务器 ECS → 实例**：
 
-- **Instance ID**: the `i-...` string in the list
-- **Region**: shown at the top left; the code goes in `regionId`
+- **实例 ID**：列表里 `i-` 开头那一串，例如 `i-xxxxxxxxxxxxxxxxx`
+- **地域**：页面左上角显示，比如「中国香港」对应 `cn-hongkong`；「华东1（杭州）」对应 `cn-hangzhou`
 
-| Console label | regionId |
+对照表（常见几个）：
+
+| 控制台显示 | regionId |
 |---|---|
-| Hong Kong | `cn-hongkong` |
-| Hangzhou | `cn-hangzhou` |
-| Beijing | `cn-beijing` |
-| Shenzhen | `cn-shenzhen` |
-| Singapore | `ap-southeast-1` |
+| 中国香港 | `cn-hongkong` |
+| 华东1（杭州） | `cn-hangzhou` |
+| 华北2（北京） | `cn-beijing` |
+| 华南1（深圳） | `cn-shenzhen` |
+| 新加坡 | `ap-southeast-1` |
 
-### 4. Install DSH
+### 4. 装好 DSH
 
-Node.js 20 or newer, then:
+需要 Node.js 20 以上，然后：
 
 ```powershell
 npx @deepseek-ai/dsh@latest web
 ```
 
-Open the URL it prints (usually `http://127.0.0.1:3080`).
+浏览器打开命令提示的地址（一般是 `http://127.0.0.1:3080`），能看到聊天界面就说明 DSH 正常。
 
 ---
 
-## Install the plugin
+## 安装插件
 
-This is a DSH **bundle**: no third-party dependencies, no `npm install`, no build step.
+这个插件是 DSH 的 **bundle（插件包）**，没有第三方依赖、不需要 `npm install`、不需要编译。
+
+### 方式 A：让 DSH 里的 AI 帮你装（推荐，新手友好）
+
+1. 先把仓库克隆到本地：
 
 ```powershell
 git clone https://github.com/SepTem61r/dsh-aliyun-ecs-connect.git D:\dsh-aliyun-ecs-connect
 ```
 
-Then either ask the DSH agent to install that directory as a bundle, or call the plugin manager's `install_bundle` with the directory path. When the plugin manager reports the bundle as installed and applied, type `/` in the composer to confirm the three commands.
+2. 在 DSH 聊天框里发：
 
-> If installation reports that `pnpm` is missing: run `npm install -g pnpm` and retry. pnpm is only needed by DSH's plugin installer — the plugin itself uses only Node built-ins.
+> 帮我把 `D:\dsh-aliyun-ecs-connect` 这个目录作为插件安装到当前 profile，装好后告诉我。
+
+AI 会调用插件管理器把它安装并激活。看到回复「已安装/已激活」即可。
+
+### 方式 B：手动用插件管理器
+
+在 DSH 里（或让 AI 执行）调用插件管理器的 `install_bundle`，目标指向这个目录：
+
+```text
+D:\dsh-aliyun-ecs-connect
+```
+
+安装完刷新页面，输入框打 `/` 能看到三条命令就成功了。
+
+> 装的时候如果提示 `pnpm` 不存在：先在 PowerShell 里跑 `npm install -g pnpm`，再重装插件。
+> 这个插件只用 Node 内置模块，所以 pnpm 只是**安装阶段**需要，运行时不需要。
 
 ---
 
-## Write the two configuration files
+## 写两个配置文件
 
-The plugin deliberately keeps **no personal data in the repository**. Yours live in your own home directory:
+插件**故意**不在自己的代码里存任何个人信息。你的东西放在你自己的用户目录：
 
-| File | Contents | In the repo? |
+| 文件 | 放什么 | 会不会被提交到 GitHub |
 |---|---|---|
-| `%USERPROFILE%\.dsh\aliyun-ecs-settings.json` | instance ID, region, key path, toggles | no |
-| `%USERPROFILE%\.dsh\aliyun-ecs.json` | AccessKey ID / Secret | no |
+| `%USERPROFILE%\.dsh\aliyun-ecs-settings.json` | 实例 ID、地域、pem 路径等 | 不会（在 DSH 配置目录，不在仓库里） |
+| `%USERPROFILE%\.dsh\aliyun-ecs.json` | AccessKey ID / Secret | 不会 |
 
-Both are plain JSON — Notepad is enough.
+两个文件都是 JSON，**用记事本就能改**。
 
-### `aliyun-ecs-settings.json`
+### 设置文件 `aliyun-ecs-settings.json`
 
 ```powershell
 notepad "$env:USERPROFILE\.dsh\aliyun-ecs-settings.json"
@@ -275,26 +310,28 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs-settings.json"
 }
 ```
 
-Windows paths need `\\` inside JSON.
+⚠️ JSON 里 Windows 路径的 `\` 要写成 `\\`。
 
-| Key | Default | Meaning |
+完整字段说明：
+
+| 字段 | 默认值 | 说明 |
 |---|---|---|
-| `regionId` | `cn-hongkong` | ECS region |
-| `instanceId` | required | Instance ID |
-| `sshUser` | `root` | SSH user |
-| `identityFile` | required | Absolute path to the private key |
-| `sshPort` | `22` | SSH port |
-| `terminal` | `auto` | `auto` (Windows Terminal, then cmd), `wt`, or `cmd` |
-| `autoConnect` | `false` | Connect automatically when the harness boots |
-| `autoConnectDelayMs` | `2500` | Delay before that automatic connect |
-| `startTimeoutMs` | `180000` | Total budget for start + IP |
-| `pollIntervalMs` | `3000` | Polling interval |
-| `sshReadyTimeoutMs` | `90000` | Budget for port 22 |
-| `credentialsFile` | `~/.dsh/aliyun-ecs.json` | Override the credential path |
-| `settingsFile` | `~/.dsh/aliyun-ecs-settings.json` | Override this file's path |
-| `endpoint` | `ecs.<regionId>.aliyuncs.com` | Override the API endpoint |
+| `regionId` | `cn-hongkong` | 地域，见上面的对照表 |
+| `instanceId` | 无（必填） | 实例 ID |
+| `sshUser` | `root` | SSH 用户名 |
+| `identityFile` | 无（必填） | `.pem` 私钥的绝对路径 |
+| `sshPort` | `22` | SSH 端口 |
+| `terminal` | `auto` | `auto`＝先试 Windows Terminal、失败退回 cmd；也可强制 `wt` / `cmd` |
+| `autoConnect` | `false` | `true`＝DSH 一启动就自动连；默认关 |
+| `autoConnectDelayMs` | `2500` | 自动连接的延迟（毫秒） |
+| `startTimeoutMs` | `180000` | 等开机 + IP 的总超时 |
+| `pollIntervalMs` | `3000` | 轮询间隔 |
+| `sshReadyTimeoutMs` | `90000` | 等 22 端口的预算 |
+| `credentialsFile` | `~/.dsh/aliyun-ecs.json` | 自定义密钥文件路径 |
+| `settingsFile` | `~/.dsh/aliyun-ecs-settings.json` | 自定义本文件路径 |
+| `endpoint` | `ecs.<regionId>.aliyuncs.com` | 自定义 API 域名（一般不用改） |
 
-### `aliyun-ecs.json`
+### 密钥文件 `aliyun-ecs.json`
 
 ```powershell
 notepad "$env:USERPROFILE\.dsh\aliyun-ecs.json"
@@ -304,154 +341,171 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs.json"
 { "accessKeyId": "LTAI5t...", "accessKeySecret": "..." }
 ```
 
-The environment variables `ALIYUN_ACCESS_KEY_ID` / `ALIYUN_ACCESS_KEY_SECRET` take priority. Optionally tighten the file ACL to yourself:
-
-```powershell
-$p = "$env:USERPROFILE\.dsh\aliyun-ecs.json"
-$me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
-icacls $p /grant:r ($me + ':(F)')
-icacls $p /inheritance:r
-```
-
----
-
-## First run and verification
-
-1. **Restart DSH** — configuration is read at startup.
-2. Type `/` — you should see `connect`, `ecs-status`, `ecs-stop`.
-3. Run `/ecs-status` first: it proves credentials and settings are right without starting anything.
-4. Run `/connect`: it waits 20–60 s (longer for cold starts) and then opens the terminal.
-5. Type `whoami` in that window — `root` means everything works.
-
-New IPs are auto-accepted: the generated command uses `StrictHostKeyChecking=accept-new`.
+> 也可以用环境变量 `ALIYUN_ACCESS_KEY_ID` / `ALIYUN_ACCESS_KEY_SECRET`（优先级更高），但文件方式改起来最方便。
+> 想把文件权限收紧成「只有你能读」可以跑（可选）：
+>
+> ```powershell
+> $p = "$env:USERPROFILE\.dsh\aliyun-ecs.json"
+> $me = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+> icacls $p /grant:r ($me + ':(F)')
+> icacls $p /inheritance:r
+> ```
 
 ---
 
-## Daily use
+## 第一次运行与验证
+
+1. **重启 DSH**（配置只在启动时读）：关掉再 `npx @deepseek-ai/dsh@latest web`
+2. 输入框打 `/` → 应看到 `connect` / `ecs-status` / `ecs-stop`
+3. 先跑 `/ecs-status`：
+   - 成功：显示 `i-xxxx Running/Stopped` 和公网 IP
+   - 失败：看 [排错手册](#排错手册)，基本都是配置或权限问题
+4. 再跑 `/connect`：会等 20~60 秒（开机慢的话更久），然后弹出终端窗口
+5. 在那个窗口里敲 `whoami` 试试，能看到 `root` 就彻底通了
+
+> 第一次连某个新 IP 时，`ssh` 会问 `Are you sure you want to continue connecting?` —— 插件已经加了 `StrictHostKeyChecking=accept-new`，会自动接受新主机。
+
+---
+
+## 日常使用
 
 ```text
-/connect       start if needed, resolve the IP, open a terminal
-/ecs-status    status and current public IP
-/ecs-stop      stop it when you are done
+/connect       开机（如果没开）+ 拿 IP + 弹终端
+/ecs-status    看看现在什么状态、IP 是多少
+/ecs-stop      用完停机，停止计费（按量付费实例）
 ```
 
-Or just talk to the agent: "connect me to the server", "what's the server status?", "shut it down".
+不想记命令也行，直接说：
 
-`/connect` does **not** stop the instance when you close the terminal window — run `/ecs-stop` when you are done.
+> 帮我连一下服务器
 
----
+> 服务器现在是什么状态？
 
-## Billing
+> 用完了吧，帮我把机器关了
 
-- The plugin only starts and stops an instance; it does not change the billing method.
-- Stopping only saves money on **pay-as-you-go instances in billing-stopping mode**.
-- Disks still bill while stopped, and a bound EIP may bill as well.
-- Pay-as-you-go is billed per second while running — `/ecs-stop` reliably.
-- Alibaba Cloud's own scheduled start/stop tasks also work when your PC is off; `/ecs-stop` only works while DSH is running. Combine both if you want a safety net.
+AI 会调用对应工具完成。
+
+**注意**：`/connect` 是「开机并连上」，它不会在你关闭终端窗口时自动关机。不用了记得 `/ecs-stop`。
 
 ---
 
-## Why no EIP is needed
+## 费用与省钱
 
-A pay-as-you-go instance in billing-stopping mode releases its public IP when stopped and receives a new one on start — that is why the address keeps changing. The plugin resolves the address after every start, so a fixed EIP (and its idle fee) is unnecessary. Buy an EIP only when you need a stable address for DNS or an allowlist.
-
----
-
-## Security notes
-
-- Use a **RAM sub-account** with only those three actions; never a primary AccessKey.
-- Never commit the AccessKey, the `.pem`, or the settings file; `.gitignore` covers them, but they live outside the repo anyway.
-- The plugin uses the key only to sign requests. It never logs or reports it.
-- The terminal command contains the key path; nothing writes it to a log file.
+- 插件只负责**开机**和**停机**，不改你的计费方式。
+- 只有「**按量付费 + 节省停机模式**」的实例，停机才真的省 CPU/内存钱。包年包月停机照扣。
+- 停机后**云盘**仍然计费；绑了 **EIP** 的话 EIP 也可能产生保留费。
+- 按量付费是开机期间按秒扣费 —— 用完就 `/ecs-stop`。
+- 更彻底的兜底：阿里云控制台的**定时开关机**任务，在你电脑关机时也会执行；`/ecs-stop` 只在 DSH 运行时有效。两个可以一起用。
 
 ---
 
-## Troubleshooting
+## 为什么不需要弹性公网 IP（EIP）
 
-| Message | Cause | Fix |
+按量付费 + 节省停机模式的实例，**停机时公网 IP 会被回收**，下次开机重新分配 —— 这就是你以前每次 IP 都不一样的原因。
+
+所以这个插件每次开机后**现查 IP**，根本不需要固定 IP。EIP（弹性公网 IP）是独立计费的资源，停机或未绑定时还有保留费 —— 除非你要拿 IP 去做域名解析或防火墙白名单，否则没必要买。
+
+---
+
+## 安全须知
+
+- **用 RAM 子账号**，只授这三项权限，不要用主账号 AccessKey。
+- **绝不提交密钥**：`AccessKey`、`.pem`、设置文件都在你的用户目录，仓库里 `.gitignore` 也挡住了它们。
+- 插件**只把密钥用于签名请求**，不会打印、不会上报。
+- 插件会打开一个终端窗口执行 `ssh` —— 这条命令里包含你的 pem 路径，但不会写进任何日志文件。
+
+---
+
+## 排错手册
+
+| 你看到的提示 | 原因 | 怎么修 |
 |---|---|---|
-| `缺少 instanceId` | Settings file has no instance ID | Add `instanceId` |
-| `找不到 SSH 私钥文件` | Wrong `identityFile` path | Check `Test-Path`; use `\\` in JSON |
-| `找不到 AccessKey 文件` | Credential file missing | Create `aliyun-ecs.json` |
-| `AccessKey 文件里还是模板占位内容` | Example file copied verbatim | Put the real ID / secret |
-| `设置文件不是合法 JSON` | Missing comma or quote | Validate the JSON; escape Windows paths |
-| `Forbidden.RAM` | Sub-account not authorized | Attach the policy; some accounts need `"Resource": "*"` |
-| `InstanceNotFound` | Wrong ID / region, or another account's key | Double-check both |
-| `等待实例运行超时` | Instance stuck starting | Inspect it in the console (stock, arrears, system issue) |
-| Window opens but cannot connect | Security group blocks 22, or sshd not ready | Fix the rule; retry after 30 s |
-| `/` shows no commands | Plugin not installed, or not restarted | Install the bundle, restart DSH |
-| `pnpm: command not found` during install | DSH's installer needs pnpm | `npm install -g pnpm` |
-| Non-standard SSH port | Port changed | Set `sshPort` |
+| `缺少 instanceId` | 设置文件没写实例 ID | 编辑 `aliyun-ecs-settings.json`，填 `instanceId` |
+| `找不到 SSH 私钥文件` | `identityFile` 路径不对 | 确认 `Test-Path "你的路径"` 返回 True；JSON 里 `\` 要写 `\\` |
+| `找不到 AccessKey 文件` | 密钥文件不存在 | 按上面创建 `aliyun-ecs.json` |
+| `AccessKey 文件里还是模板占位内容` | 直接复制了示例，没改值 | 换成真实的 ID / Secret |
+| `设置文件不是合法 JSON` | 少了逗号/引号 | 用 JSON 校验工具检查，注意 Windows 路径转义 |
+| `Forbidden.RAM` | 子账号没授权 | 重新检查策略是否绑定到该用户；必要时把 `Resource` 改成 `"*"` |
+| `InstanceNotFound` | 实例 ID / 地域不对，或 AccessKey 属于别的账号 | 核对 ID、地域；确认子账号属于这个阿里云账号 |
+| `等待实例运行超时` | 实例卡在启动中 | 去控制台看实例状态，通常是库存/欠费/系统问题 |
+| 窗口弹出来了但连不上 | 安全组没放行 22，或 sshd 还没起完 | 检查安全组入方向规则；等 30 秒再 `/connect` |
+| 输入 `/` 看不到命令 | 插件没装上，或没重启 | 重新用 `install_bundle` 安装，然后重启 DSH |
+| `pnpm: command not found`（安装时） | DSH 插件安装器依赖 pnpm | `npm install -g pnpm` 后重试 |
+| 端口不是 22 | 改过 SSH 端口 | 设置文件里填 `sshPort` |
 
-Diagnose in order: `/ecs-status` first (proves settings + credentials), then `/connect`.
-
----
-
-## FAQ
-
-**Will opening DSH start the server and cost money?**
-No. `autoConnect` defaults to `false`; only `/connect` starts it.
-
-**Do I need to restart after editing the settings?**
-Yes for the settings file. The credential file is read per operation, so key rotation needs no restart.
-
-**Can it manage several instances?**
-One instance per configuration today. Use a second profile with a different `instanceId`, or open an issue.
-
-**Does it work on macOS / Linux?**
-Not yet: the window launch uses `wt.exe` / `cmd.exe`. Only `lib/terminal.js` needs a port.
-
-**No Windows Terminal installed?**
-`terminal: "auto"` falls back to `cmd.exe`; functionality is identical.
-
-**The IP changes every time — will SSH complain about the host key?**
-A new IP is a new entry in `known_hosts` and is accepted automatically; old entries stay but do not interfere.
-
-**Does the plugin send my data anywhere?**
-It only talks to `ecs.<region>.aliyuncs.com`. No telemetry, no external services.
+排查顺序建议：先 `/ecs-status` 确认「能读到实例」，再 `/connect`；前者过不了就是配置/密钥问题，跟 ssh 无关。
 
 ---
 
-## Development
+## 常见问题 FAQ
 
-No dependencies, no build step.
+**Q：会不会一打开 DSH 就把服务器开起来、开始扣钱？**
+不会。`autoConnect` 默认是 `false`，只有你输入 `/connect` 才会开机。
+
+**Q：改了设置文件要重启吗？**
+要。插件在启动时读取配置。密钥文件（`aliyun-ecs.json`）是每次操作现读的，改密钥不用重启。
+
+**Q：能同时管多台服务器吗？**
+当前版本一份配置管一台。需要多台可以复制一份配置换个 `instanceId`（比如再装一个 profile），或者告诉我，我把多实例支持加上。
+
+**Q：macOS / Linux 能用吗？**
+目前不行：开窗口那一步用的是 Windows 的 `wt.exe` / `cmd.exe`。其他平台需要改 `lib/terminal.js`。
+
+**Q：没装 Windows Terminal 怎么办？**
+`terminal: "auto"` 会自动退回 `cmd.exe` 开窗口，功能一样，只是界面朴素一点。
+
+**Q：服务器 IP 每次变，SSH 会不会因为 host key 变化报错？**
+新 IP 对 `known_hosts` 来说是「新主机」，会自动接受。旧的记录会一直留着，不影响使用。
+
+**Q：为什么不用 EIP 让 IP 固定？**
+见[上面](#为什么不需要弹性公网-ipeip)。插件每次现查，够用且省钱。
+
+**Q：这个插件会上传我的数据吗？**
+不会。它只和 `ecs.<region>.aliyuncs.com`（阿里云 API）通信；没有遥测、没有外部服务。
+
+---
+
+## 开发与测试
+
+零依赖、无构建步骤。
 
 ```powershell
-node test/plugin-wiring.mjs   # command/tool registration and the auto-connect branch
-node test/smoke.mjs --status  # read-only query using the real settings file
-node test/smoke.mjs --open    # full flow, opens a terminal
-node test/smoke.mjs --stop    # stop the instance
+node test/plugin-wiring.mjs   # 命令/工具注册 + 自动连接分支（不需要真实例）
+node test/smoke.mjs --status  # 用真实设置文件查一次实例（只读）
+node test/smoke.mjs --open    # 完整流程：开机 + 开窗口
+node test/smoke.mjs --stop    # 停机
 ```
 
-| File | Role |
+代码结构：
+
+| 文件 | 作用 |
 |---|---|
-| `index.js` | Plugin wiring: commands, `ecs_connect` tool, boot-time auto connect |
-| `lib/ecs.js` | Hand-written ECS OpenAPI client (HMAC-SHA1, `node:crypto`) |
-| `lib/flow.js` | Orchestration: status → start → wait → port probe → terminal |
-| `lib/terminal.js` | Windows Terminal launch with a `cmd.exe` fallback |
-| `lib/config.js` | Defaults, settings file, credential loading and validation |
-| `cordis.patch.yml` | Bundle patch that inserts the row (contains no personal data) |
+| `index.js` | 插件接线：注册 `/connect` 等命令、`ecs_connect` 工具、自动连接 |
+| `lib/ecs.js` | 手写的阿里云 OpenAPI 客户端（HMAC-SHA1 签名，只用 `node:crypto`） |
+| `lib/flow.js` | 编排：查状态 → 开机 → 等运行 → 等端口 → 开窗口 |
+| `lib/terminal.js` | 启动 Windows Terminal（失败退回 cmd） |
+| `lib/config.js` | 默认值、设置文件、密钥读取与校验 |
+| `cordis.patch.yml` | bundle 补丁：把插件行插进 profile（不含任何个人信息） |
 
 ---
 
-## Layout
+## 目录结构
 
 ```text
 dsh-aliyun-ecs-connect/
-├─ index.js                 # plugin entry (commands / tool / auto connect)
-├─ lib/                     # client, orchestration, terminal, config
-├─ locale/                  # plugin page titles and descriptions
-├─ icon.svg                 # plugin icon
-├─ cordis.patch.yml         # bundle patch
-├─ examples/                # example settings and RAM policy
-├─ test/                    # wiring test + smoke test
-├─ README.md                # English (this file)
-├─ README.zh-CN.md          # Chinese tutorial
+├─ index.js                 # 插件入口（命令 / 工具 / 自动连接）
+├─ lib/                     # 客户端、编排、终端、配置
+├─ locale/                  # 插件页里的中英文标题和描述
+├─ icon.svg                 # 插件图标
+├─ cordis.patch.yml         # bundle 补丁
+├─ examples/                # 设置文件与 RAM 策略的示例
+├─ test/                    # wiring 测试 + smoke 测试
+├─ README.md                # 本文件（中文教程）
 └─ LICENSE                  # MIT
 ```
 
 ---
 
-## License
+## 许可证
 
-MIT — see [LICENSE](LICENSE).
+MIT —— 见 [LICENSE](LICENSE)。
