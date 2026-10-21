@@ -5,6 +5,7 @@
  *
  *   node test/smoke.mjs --status                    # query only (uses settings file)
  *   node test/smoke.mjs --open                      # full flow + open a terminal
+ *   node test/smoke.mjs --mode dsh                  # copy the ssh command instead of opening a window
  *   node test/smoke.mjs --stop                      # stop the instance
  *   node test/smoke.mjs --status --instance i-xxxx --key "D:\key.pem"   # override settings
  */
@@ -20,6 +21,7 @@ const { values } = parseArgs({
     region: { type: 'string' },
     user: { type: 'string' },
     settings: { type: 'string' },
+    mode: { type: 'string' },
     open: { type: 'boolean', default: false },
     status: { type: 'boolean', default: false },
     stop: { type: 'boolean', default: false },
@@ -51,10 +53,16 @@ if (error !== undefined) {
       const info = await describeInstance(config, credentials)
       log(`${info.instanceId} ${info.status} ip=${info.ip || '(none)'} region=${info.regionId}`)
     } else {
-      const result = await connectToInstance({ config, credentials, openTerminal: values.open, log })
+      const result = await connectToInstance({
+        config,
+        credentials,
+        openTerminal: values.open,
+        mode: values.mode,
+        log,
+      })
       log(`instance=${result.instanceId} status=${result.status} ip=${result.ip}`)
       log(`ssh=${result.sshCommand}`)
-      log(`sshReady=${result.sshReady} terminal=${result.terminal || '(not opened)'}`)
+      log(`sshReady=${result.sshReady} terminal=${result.terminal || '(not opened)'} clipboard=${result.clipboard}`)
     }
     log(`credential source: ${credentials.source}`)
   } catch (caught) {

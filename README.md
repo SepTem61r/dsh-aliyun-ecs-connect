@@ -146,9 +146,10 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs.json"
 
 | 入口 | 作用 |
 |---|---|
-| `/connect` | 完整流程：按需开机 → 查 IP → 等 SSH → 开终端 |
+| `/connect` | 完整流程：按需开机 → 查 IP → 等 SSH → 按配置的方式交付终端 |
 | `/ecs-status` | 只看状态和当前公网 IP，**绝不启动**实例 |
 | `/ecs-stop` | 停机（按量付费实例优先用「节省停机模式」，更省钱） |
+| 打开方式可选 | 外部窗口 / 只在 DSH 里用（复制命令）/ 只显示命令，见[终端在哪里打开](#终端在哪里打开可配置) |
 | 自然语言 | 直接对 DSH 说「帮我连一下服务器」，AI 会调用 `ecs_connect` 工具 |
 | 启动时自动连 | 默认**关闭**；想要就设 `autoConnect: true` |
 
@@ -321,7 +322,7 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs-settings.json"
 | `sshUser` | `root` | SSH 用户名 |
 | `identityFile` | 无（必填） | `.pem` 私钥的绝对路径 |
 | `sshPort` | `22` | SSH 端口 |
-| `terminal` | `auto` | `auto`＝先试 Windows Terminal、失败退回 cmd；也可强制 `wt` / `cmd` |
+| `terminal` | `auto` | `auto`＝先试 Windows Terminal、失败退回 cmd；也可 `wt` / `cmd` / `dsh`（只复制命令给 DSH 终端）/ `none` |
 | `autoConnect` | `false` | `true`＝DSH 一启动就自动连；默认关 |
 | `autoConnectDelayMs` | `2500` | 自动连接的延迟（毫秒） |
 | `startTimeoutMs` | `180000` | 等开机 + IP 的总超时 |
@@ -384,6 +385,36 @@ notepad "$env:USERPROFILE\.dsh\aliyun-ecs.json"
 > 用完了吧，帮我把机器关了
 
 AI 会调用对应工具完成。
+
+### 终端在哪里打开（可配置）
+
+不同人习惯不同，所以打开方式可以选。设置文件里的 `terminal` 字段决定默认行为：
+
+| 值 | 行为 | 适合谁 |
+|---|---|---|
+| `auto`（默认） | 先试 Windows Terminal，失败退回 cmd 窗口 | 大多数人 |
+| `wt` | 强制 Windows Terminal | 只想用 Windows Terminal |
+| `cmd` | 强制 cmd 窗口 | 没装 Windows Terminal / 喜欢经典控制台 |
+| `dsh` | **不开外部窗口**，把 ssh 命令复制到剪贴板 | 喜欢在 DSH 右侧边栏终端里干活的人 |
+| `none` | 只显示命令，不复制也不开窗 | 想自己粘到别处 |
+
+`dsh` 模式的完整用法：
+
+1. 设置文件里把 `terminal` 改成 `"dsh"`，重启 DSH
+2. `/connect`：开机 → 拿 IP → **ssh 命令自动进剪贴板**
+3. 打开右侧边栏终端：**Ctrl + Shift + B**，再按 **Ctrl + `**（反引号）新开一个
+4. **Ctrl + V** 粘贴、回车 —— 就连上了
+
+也可以**临时**指定，不改配置：
+
+```text
+/connect dsh      这次只复制命令，不开窗口
+/connect wt       这次强制 Windows Terminal
+/connect cmd      这次用 cmd
+/connect none     这次只显示命令
+```
+
+对 AI 说「连一下服务器，在 DSH 里」时，它会带 `mode: "dsh"` 调用 `ecs_connect`。
 
 **注意**：`/connect` 是「开机并连上」，它不会在你关闭终端窗口时自动关机。不用了记得 `/ecs-stop`。
 
@@ -484,6 +515,9 @@ AI 会调用对应工具完成。
 
 **Q：macOS / Linux 能用吗？**
 目前不行：开窗口那一步用的是 Windows 的 `wt.exe` / `cmd.exe`。其他平台需要改 `lib/terminal.js`。
+
+**Q：我更习惯在 DSH 里操作，不想弹外部窗口怎么办？**
+把 `terminal` 设成 `"dsh"`，或者临时用 `/connect dsh`：命令会自动进剪贴板，你在右侧边栏终端里 `Ctrl+V` 就连上。详见[终端在哪里打开](#终端在哪里打开可配置)。
 
 **Q：没装 Windows Terminal 怎么办？**
 `terminal: "auto"` 会自动退回 `cmd.exe` 开窗口，功能一样，只是界面朴素一点。

@@ -10,6 +10,7 @@
  */
 import { connectToInstance } from './lib/flow.js'
 import { describeInstance, stopInstance } from './lib/ecs.js'
+import { normalizeTerminalMode } from './lib/terminal.js'
 import {
   assertInstanceConfig,
   assertRunnableConfig,
@@ -33,6 +34,24 @@ function failure(error) {
   return { kind: 'error', text: `失败：${error instanceof Error ? error.message : String(error)}` }
 }
 
+/** One-line description of where the session ended up. */
+const MODE_USAGE = '用法：/connect [auto|wt|cmd|dsh|none]（不带参数时用设置文件里的 terminal）'
+
+/**
+ * Describe the terminal outcome for a human reading the command result.
+ * @param {{terminal: string, clipboard: boolean}} result - connect outcome.
+ * @returns {string} description.
+ */
+function describeOutcome(result) {
+  if (result.terminal === 'dsh') {
+    return result.clipboard
+      ? '已复制到剪贴板 → 切到 DSH 右侧边栏终端 Ctrl+V 即可'
+      : '剪贴板不可用，请手动复制下面的命令'
+  }
+  if (result.terminal === 'none') return '未打开（只显示命令）'
+  return `已在 ${result.terminal} 窗口打开`
+}
+
 /**
  * Register commands, the model tool, and the optional boot-time auto connect.
  * @param {object} ctx - Cordis context carrying the command and tool registries.
@@ -51,9 +70,16 @@ export function apply(ctx, rowConfig) {
 
   // Async on purpose: assertRunnableConfig/loadCredentials throw synchronously,
   // and the boot-time auto connect has no caller to catch that.
-  const connect = async (signal, openTerminal) => {
+  const connect = async (signal, options = {}) => {
     assertRunnableConfig(config)
-    return connectToInstance({ config, credentials: loadCredentials(config), signal, openTerminal, log })
+    return connectToInstance({
+      config,
+      credentials: loadCredentials(config),
+      signal,
+      log,
+      mode: options.mode,
+      openTerminal: options.openTerminal,
+    })
   }
 
   log(
@@ -64,16 +90,23 @@ export function apply(ctx, rowConfig) {
   ctx.effect(function* registerCommands() {
     yield ctx.commands.register({
       name: 'connect',
-      description: '启动阿里云 ECS（已运行则跳过），取得公网 IP 并打开 SSH 终端',
+      description: '启动阿里云 ECS（已运行则跳过），取得公网 IP 并打开 SSH 终端（可临时指定打开方式）',
+      input: { hint: '[auto|wt|cmd|dsh|none]' },
       handler: async invocation => {
         try {
-          const result = await connect(invocation.signal, true)
+          const requested = invocation.rawInput.trim()
+          let mode
+          if (requested.length > 0) {
+            mode = normalizeTerminalMode(requested)
+            if (mode === undefined) return { kind: 'error', text: MODE_USAGE }
+          }
+          const result = await connect(invocation.signal, { mode })
           return {
             kind: 'success',
             text: [
               `✅ ${result.instanceId}（${result.status}）`,
               `公网 IP：${result.ip}`,
-              `终端：${result.terminal || '未打开'}${result.sshReady ? '' : '（SSH 端口尚未就绪）'}`,
+              `终端：${describeOutcome(result)}${result.sshReady ? '' : '（SSH 端口尚未就绪）'}`,
               `命令：${result.sshCommand}`,
             ].join('\n'),
           }
@@ -123,13 +156,13 @@ export function apply(ctx, rowConfig) {
     try {
       return ctx.tools.register({
         name: 'ecs_connect',
-        description: '启动阿里云 ECS 实例（已运行则跳过），等待公网 IP 与 SSH 就绪，并在本机打开一个 SSH 终端窗口。',
+        description: '启动阿里云 ECS 实例（已运行则跳过），等待公网 IP 与 SSH 就绪，并按指定方式交付会话：外部终端窗口、复制命令到剪贴板（供 DSH 右侧边栏终端粘贴），或只返回命令。',
         parameters: {
           type: 'object',
           properties: {
-            openTerminal: {
-              type: 'boolean',
-              description: '是否打开终端窗口，默认 true；设为 false 时只返回连接命令。',
+            mode: {
+              type: 'string',
+              description: '打开方式：auto（默认，先 Windows Terminal 再 cmd）、wt、cmd、dsh（不开窗口，把 ssh 命令复制到剪贴板）、none（只返回命令）。',
             },
           },
           additionalProperties: false,
@@ -145,6 +178,7 @@ export function apply(ctx, rowConfig) {
               sshCommand: { type: 'string' },
               sshReady: { type: 'boolean' },
               terminal: { type: 'string' },
+              clipboard: { type: 'boolean' },
             },
           },
           render: (_args, value) => [{
@@ -153,7 +187,11 @@ export function apply(ctx, rowConfig) {
           }],
         },
         async execute(args, exec) {
-          const result = await connect(exec.signal, args?.openTerminal !== false)
+          const requested = args?.mode === undefined ? undefined : normalizeTerminalMode(args.mode)
+          if (args?.mode !== undefined && requested === undefined) {
+            throw new Error('mode 必须是 auto、wt、cmd、dsh 或 none')
+          }
+          const result = await connect(exec.signal, { mode: requested })
           return {
             instanceId: result.instanceId,
             status: result.status,
@@ -161,6 +199,7 @@ export function apply(ctx, rowConfig) {
             sshCommand: result.sshCommand,
             sshReady: result.sshReady,
             terminal: result.terminal,
+            clipboard: result.clipboard,
           }
         },
       })
@@ -178,7 +217,7 @@ export function apply(ctx, rowConfig) {
       const timer = setTimeout(() => {
         // The extra tick keeps a synchronous throw out of the timer callback too.
         Promise.resolve()
-          .then(() => connect(undefined, true))
+          .then(() => connect(undefined, {}))
           .catch(error => log('自动连接失败：', error))
       }, Number(config.autoConnectDelayMs) || 2_500)
       timer.unref?.()

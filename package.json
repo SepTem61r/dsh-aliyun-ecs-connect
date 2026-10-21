@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-plugin-aliyun-ecs-connect",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Start an Alibaba Cloud ECS instance on demand, read its current public IP, and open an SSH terminal.",
   "type": "module",
   "exports": {
